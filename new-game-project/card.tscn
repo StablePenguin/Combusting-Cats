@@ -1,0 +1,15 @@
+[gd_scene load_steps=3 format=3 uid="uid://belvm77225t2m"]
+
+[ext_resource type="Texture2D" uid="uid://bmihvohn12jas" path="res://cards/cat tac card.png" id="1_kikvd"]
+[ext_resource type="Script" uid="uid://bjw2nqm26xh46" path="res://card.gd" id="2_rjlel"]
+
+[node name="card" type="TextureRect"]
+offset_right = 134.0
+offset_bottom = 185.84924
+pivot_offset = Vector2(85.45, 118.445)
+texture = ExtResource("1_kikvd")
+expand_mode = 1
+script = ExtResource("2_rjlel")
+
+[connection signal="mouse_entered" from="." to="." method="_on_mouse_entered"]
+[connection signal="mouse_exited" from="." to="." method="_on_mouse_exited"]
