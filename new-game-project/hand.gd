@@ -1,30 +1,26 @@
 extends Control
 
-var bomb_drawn := false
-var pending_bomb_texture: Texture2D = null
-var discard_pile := []			# list of all discarded textures
-@onready var discard_area := $discard	# TextureRect showing top of pile
-var is_my_turn = true      # later used for multiplayer
-var cards_played_this_turn = []
-var must_draw_to_end_turn = true
+# ---------- STATE ----------
+var discard_pile = []                       # list of discarded textures
+@onready var discard_area = $discard        # TextureRect showing top of pile
 
-var card_scene := preload("res://Card.tscn")
-var cards = []
-var deck: Array = []
+var is_my_turn = false
+var cards_played_this_turn = []             # for cat combos
 
-func _process(_delta: float) -> void:
-	if is_my_turn:
-		$Button.visible = true
-	else:
-		$Button.visible = false
+var player_id
+var player_hands = {}                       # { peer_id: [Texture2D, ...] }
+var current_turn = 1                        # 1 = host, 2 = client
 
-#-------CARDS-------
+var card_scene = preload("res://Card.tscn")
+var cards = []                              # visual card nodes in this player's hand
+var deck = []                               # array of Texture2D
 
+# ---------- CARD TEXTURES ----------
 var cat_tac = preload("res://cards/cat tac card.png")
 var cat_alope = preload("res://cards/cat-alope card.png")
-var combusting_cat = preload("res://cards/combusting cat card.png")	# Exploding Kitten
+var combusting_cat = preload("res://cards/combusting cat card.png")   # Exploding Kitten
 var commence_hostilities = preload("res://cards/commence hostilities card.png")
-var deactivate = preload("res://cards/deactivate card.png")			# Defuse
+var deactivate = preload("res://cards/deactivate card.png")           # Defuse
 var gay_cat = preload("res://cards/gay cat card.png")
 var goatee_cat = preload("res://cards/goatee cat card.png")
 var indulgence = preload("res://cards/indulgence card.png")
@@ -34,7 +30,7 @@ var rearrange = preload("res://cards/rearrange card.png")
 var view_2050 = preload("res://cards/view 2050 card.png")
 var yam_cat = preload("res://cards/yam cat with hair card.png")
 
-var card_types := {
+var card_types = {
 	cat_tac: "cat_tac",
 	cat_alope: "cat_alope",
 	yam_cat: "cat_yam",
@@ -51,8 +47,8 @@ var card_types := {
 	view_2050: "view_2050"
 }
 
-#------deck contents-----
-var deck_contents := {
+# ---------- DECK CONTENTS ----------
+var deck_contents = {
 	cat_tac: 4,
 	yam_cat: 4,
 	cat_alope: 4,
@@ -64,29 +60,112 @@ var deck_contents := {
 	rearrange: 4,
 	view_2050: 5,
 	commence_hostilities: 4,
-	deactivate: 2,			# 2 extra defuses in deck (1 per player starts in hand)
-	combusting_cat: 1		# exploding kitten
+	deactivate: 2,
+	combusting_cat: 1
 }
 
+func debug_rpc(msg:String):
+	print("🔵 RPC:", msg)
+
 func _ready():
-	build_starting_hand_safe()
-	add_card(deactivate)
-	start_turn()
+	# --- Debug prints ---
+	multiplayer.peer_connected.connect(func(id):
+		print("CONNECTED:", id))
+	
+	multiplayer.peer_disconnected.connect(func(id):
+		print("DISCONNECTED:", id))
 
-func start_turn():
-	cards_played_this_turn.clear()
-	is_my_turn = true
-	print("Turn started")
+	multiplayer.server_disconnected.connect(func():
+		print("LOST CONNECTION TO SERVER"))
+
+	# Identify player
+	player_id = multiplayer.get_unique_id()
+	print("My ID:", player_id)
+
+	# --- HOST / SERVER SIDE ---
+	if multiplayer.is_server():
+		print("SERVER: Initializing game state")
+
+		# Initialize hands dictionary
+		player_hands[1] = []
+		player_hands[2] = []
+
+		# Build deck & safe starting hands
+		build_starting_deck_safe()
+		deal_starting_hands()
+
+		# Add bombs + defuses AFTER starting hands
+		insert_bombs_and_defuses()
+		deck.shuffle()
+
+		# Tell both clients whose turn it is
+		for id in [1, 2]:
+			rpc_id(id, "client_set_turn", current_turn)
+
+		# Server must manually sync itself (no RPC needed)
+		var my_hand = player_hands[player_id]
+		sync_state(deck, discard_pile, my_hand)
+
+	# --- CLIENT SIDE ---
+	else:
+		print("CLIENT: requesting sync from server…")
+		rpc_id(1, "request_sync")
 
 
+func _process(_delta):
+	$Button.visible = is_my_turn
 
-# -------------------------
-# SAFE FIRST HAND LOGIC
-# -------------------------
-func build_starting_hand_safe():
-	var deck_no_bombs := []
 
-	# Build deck but skip bomb + defuse
+# ===========================
+#  SYNC / HAND VISUAL
+# ===========================
+
+@rpc("authority", "call_local")
+func sync_state(server_deck, server_discard, my_hand):
+	deck = server_deck
+	discard_pile = server_discard
+	rebuild_hand_visual(my_hand)
+
+@rpc("any_peer")
+func request_sync():
+	if multiplayer.is_server():
+		var sender_id = multiplayer.get_remote_sender_id()
+		if not player_hands.has(sender_id):
+			return
+		var my_hand = player_hands[sender_id]
+		rpc_id(sender_id, "sync_state", deck, discard_pile, my_hand)
+
+func rebuild_hand_visual(hand):
+	# delete old nodes
+	for c in cards:
+		c.queue_free()
+	cards.clear()
+
+	# create new visual cards from textures
+	for tex in hand:
+		add_card(tex)
+
+	update_card_positions()
+
+
+# ===========================
+#  TURN SYNC
+# ===========================
+
+@rpc("authority", "call_local")
+func client_set_turn(turn_id):
+	is_my_turn = (turn_id == player_id)
+	print("My turn:", is_my_turn)
+
+
+# ===========================
+#  DECK BUILDING & DEAL
+# ===========================
+
+# Build deck WITHOUT bombs/defuses, for safe starting hands
+func build_starting_deck_safe():
+	var deck_no_bombs = []
+
 	for texture in deck_contents.keys():
 		if texture == deactivate or texture == combusting_cat:
 			continue
@@ -95,92 +174,63 @@ func build_starting_hand_safe():
 			deck_no_bombs.append(texture)
 
 	deck_no_bombs.shuffle()
-
-	# This becomes the real deck temporarily
 	deck = deck_no_bombs
 
-	# Draw 7 cards FROM THE REAL DECK
-	for i in 7:
-		var card_texture = deck.pop_back()
-		add_card(card_texture)
+# Deal 7 safe cards to each player
+func deal_starting_hands():
+	for p in [1, 2]:
+		for i in 7:
+			if deck.is_empty():
+				break
+			var card_tex = deck.pop_back()
+			player_hands[p].append(card_tex)
 
-	# Now insert bomb + extra defuses into deck
-	insert_bombs_and_defuses()
-
-	# Now shuffle fully for the real match
-	deck.shuffle()
-
+# After hands dealt, bombs + extra defuses go into deck
 func insert_bombs_and_defuses():
-	# Add ALL defuses except the one you give to the player
 	for i in deck_contents[deactivate]:
 		deck.append(deactivate)
-
-	# Add the exploding kitten
 	deck.append(combusting_cat)
 
-func discard_card(texture: Texture2D):
-	# Add to history
+func discard_card(texture):
 	discard_pile.append(texture)
-
-	# Show most recently discarded card
 	discard_area.texture = texture
 
 
-# -------------------------
-# NORMAL DECK BUILD
-# -------------------------
-func build_deck():
-	deck.clear()
+# ===========================
+#  DRAW CARD (SERVER)
+# ===========================
 
-	for texture in deck_contents.keys():
-		var count = deck_contents[texture]
-		for i in count:
-			deck.append(texture)
-
-	deck.shuffle()
-
-
-func draw_card():
-	if not is_my_turn:
+@rpc("any_peer")
+func server_draw_card(p_id):
+	debug_rpc("server_draw_card from " + str(p_id))
+	if not multiplayer.is_server():
 		return
-	if bomb_drawn:
-		print("You must deal with the bomb first! Play a Defuse.")
+
+	if p_id != current_turn:
+		print("server_draw_card: wrong turn")
 		return
+
 	if deck.is_empty():
-		print("Deck is empty!")
+		print("Deck is empty on server!")
 		return
-	var card_texture = deck.pop_back()
-	add_card(card_texture)
 
-	if card_texture == combusting_cat:
-		handle_bomb_draw(card_texture)
-		return
-	end_turn()
+	var tex = deck.pop_back()
+	player_hands[p_id].append(tex)
+
+	# sync that player's hand + shared deck/discard
+	rpc_id(p_id, "sync_state", deck, discard_pile, player_hands[p_id])
+
+	# advance turn
+	current_turn = 2 if p_id == 1 else 1
+	for id in [1, 2]:
+		rpc_id(id, "client_set_turn", current_turn)
 
 
-func handle_bomb_draw(texture: Texture2D):
-	print("!!! You drew the EXPLODING KITTEN !!!")
-	bomb_drawn = true
-	pending_bomb_texture = texture
-	if not has_defuse_in_hand():
-		print("No defuse... YOU LOSE.")
-		return
-	print("You must play a Defuse to survive!")
+# ===========================
+#  CARD NODE CREATION
+# ===========================
 
-func has_defuse_in_hand() -> bool:
-	for card in cards:
-		var tex: Texture2D = card.texture
-		if card_types[tex] == "deactivate":
-			return true
-	return false
-
-func end_turn():
-	is_my_turn = false
-	print("Turn ended")
-	await get_tree().create_timer(0.3).timeout
-	start_turn()
-
-func add_card(texture: Texture2D):
+func add_card(texture):
 	var card = card_scene.instantiate()
 	card.texture = texture
 	card.connect("card_played", Callable(self, "_on_card_played"))
@@ -188,25 +238,21 @@ func add_card(texture: Texture2D):
 	cards.append(card)
 	update_card_positions()
 
-func can_play_card(type: String) -> bool:
 
+# ===========================
+#  CLIENT-SIDE VALIDATION
+# ===========================
+
+func can_play_card(type):
+	# Disallow Exploding Kitten as a manual play (for now)
 	if type == "combusting_cat":
-		print("You cannot play the Exploding Kitten directly!")
+		print("You cannot play the Exploding Kitten directly.")
 		return false
 
-	if bomb_drawn:
-		if type == "deactivate":
-			return true
-		print("You must play a Defuse to survive!")
-		return false
-
-	if type == "deactivate":
-		print("You cannot play a Defuse right now.")
-		return false
-
+	# Example: basic cats need combos
 	if type.begins_with("cat_"):
-		var cats_in_hand := count_cat_in_hand(type)
-		var played_this_turn := 0
+		var cats_in_hand = count_cat_in_hand(type)
+		var played_this_turn = 0
 		for c in cards_played_this_turn:
 			if c == type:
 				played_this_turn += 1
@@ -220,150 +266,181 @@ func can_play_card(type: String) -> bool:
 				return true
 			print("You need TWO matching cats in your hand to start a combo.")
 			return false
+
 		return true
+
+	# For now, allow all other action cards
 	return true
 
-
-func handle_defuse_played():
-	print("Defuse used! Bomb avoided.")
-
-	var insert_position = randi() % (deck.size() + 1)
-	deck.insert(insert_position, pending_bomb_texture)
-
-	print("Bomb inserted back into deck at random position.")
-
-	bomb_drawn = false
-	pending_bomb_texture = null
-
-	end_turn()
-
-
-func count_cat_in_hand(type: String) -> int:
-	var count := 0
+func count_cat_in_hand(type):
+	var count = 0
 	for card in cards:
-		var tex: Texture2D = card.texture
-		var t: String = card_types[tex]
+		var tex = card.texture
+		var t = card_types[tex]
 		if t == type:
 			count += 1
 	return count
 
 
-func _on_card_played(card):
-	if not is_my_turn:
-		print("Can't play cards when it's not your turn!")
+# ===========================
+#  SERVER — HANDLE CARD PLAY
+# ===========================
+
+@rpc("any_peer")
+func server_play_card(p_id, type):
+	debug_rpc("server_play_card from " + str(p_id) + " with card " + type)
+	if not multiplayer.is_server():
 		return
 
-	var tex: Texture2D = card.texture
-	var type: String = card_types[tex]
-
-	if not can_play_card(type):
+	if p_id != current_turn:
+		print("server_play_card: not your turn")
 		return
 
-	print("Card played:", type)
+	if not player_hands.has(p_id):
+		print("server_play_card: unknown player id", p_id)
+		return
+
+	# Make sure this player actually has that card type
+	var found_index = -1
+	for i in player_hands[p_id].size():
+		var tex = player_hands[p_id][i]
+		if card_types[tex] == type:
+			found_index = i
+			break
+
+	if found_index == -1:
+		print("Player tried to play a card they don't have:", type)
+		return
+
+	var played_tex = player_hands[p_id].pop_at(found_index)
+	discard_pile.append(played_tex)
+
+	# track for combos (server-side)
 	cards_played_this_turn.append(type)
 
-	# Remove from hand
-	cards.erase(card)
-	card.queue_free()
-	update_card_positions()
+	# apply effect on server
+	apply_card_effect(p_id, type)
 
-	# --- DEFUSE HANDLING ---
-	if bomb_drawn and type == "deactivate":
-		for c in cards:
-			var tex2: Texture2D = c.texture
-			if card_types[tex2] == "combusting_cat":
-				cards.erase(c)
-				c.queue_free()
-				break
+	# sync both players' views of deck/discard + THEIR hand
+	for id in [1, 2]:
+		var hand = player_hands[id]
+		rpc_id(id, "sync_state", deck, discard_pile, hand)
 
-		update_card_positions()
-		handle_defuse_played()
-		return  # VERY IMPORTANT
-
-	# --- ADD THIS BACK ---
-	handle_card_effect(type)
+	# advance turn (basic version, will improve later with Attack/Skip)
+	current_turn = 2 if current_turn == 1 else 1
+	for id in [1, 2]:
+		rpc_id(id, "client_set_turn", current_turn)
 
 
-
-
-func handle_card_effect(type):
-	# CAT COMBOS
+func apply_card_effect(p_id, type):
+	# cat combos handled separately
 	if type.begins_with("cat_"):
-		handle_cat_play(type)
+		handle_cat_play_server(p_id, type)
 		return
+
 	match type:
-
-		"commence_hostilities":   # ATTACK
-			handle_attack()
-		"omit":   # SKIP
-			handle_skip()
-		"no":    # NOPE
-			handle_nope()
-		"indulgence":   # FAVOR
-			handle_favor()
-		"view_2050":   # SEE THE FUTURE
-			handle_see_future()
-		"rearrange":   # SHUFFLE
-			handle_shuffle()
-		"combusting_cat":
-			print("Bomb card effect processed earlier — should not be here.")
+		"commence_hostilities":
+			apply_attack(p_id)
+		"omit":
+			apply_skip(p_id)
+		"no":
+			apply_nope(p_id)
+		"indulgence":
+			apply_favor(p_id)
+		"view_2050":
+			apply_see_future(p_id)
+		"rearrange":
+			apply_shuffle(p_id)
 		"deactivate":
-			print("Defuse already handled.")
+			print("Server: Defuse effect not wired yet in MP.")
+		"combusting_cat":
+			print("Server: Bomb effect not wired yet in MP.")
 
-func handle_attack():
-	print("ATTACK played! Opponent must now take TWO turns.")
-	# TODO: multiplayer turn system later
-	# For now: skip drawing and end turn
-	end_turn()
 
-func handle_skip():
-	print("SKIP played! Ending turn without drawing.")
-	end_turn()
+# ---------- SERVER ACTION CARD IMPLEMENTATIONS ----------
 
-func handle_nope():
-	print("NOPE played! (Cancel effect not implemented yet — needs action history)")
+func apply_attack(p_id):
+	print("SERVER: ATTACK from player", p_id)
+	# For now, just pass the turn to opponent normally.
+	current_turn = 2 if p_id == 1 else 1
+	for id in [1, 2]:
+		rpc_id(id, "client_set_turn", current_turn)
 
-func handle_favor():
-	print("FAVOR played! Opponent must give you a card. (Not implemented yet)")
+func apply_skip(p_id):
+	print("SERVER: SKIP by player", p_id)
+	current_turn = 2 if p_id == 1 else 1
+	for id in [1, 2]:
+		rpc_id(id, "client_set_turn", current_turn)
 
-func handle_see_future():
-	print("SEE THE FUTURE: Top 3 cards are:")
-	var count: int = min(3, deck.size())
+func apply_nope(p_id):
+	print("SERVER: NOPE played (no stack/undo logic yet).")
+
+func apply_favor(p_id):
+	print("SERVER: FAVOR played (opponent gives a card — not implemented yet).")
+
+func apply_see_future(p_id):
+	var count = min(3, deck.size())
+	var reveal = []
+
 	for i in count:
-		var tex: Texture2D = deck[deck.size() - 1 - i]
-		var t: String = card_types[tex]
-		print("   ", i + 1, ": ", t)
+		reveal.append(deck[deck.size() - 1 - i])
 
+	print("SERVER: Sending See The Future cards to player", p_id)
+	rpc_id(p_id, "client_show_future", reveal)
 
-func handle_shuffle():
-	print("Shuffling the deck...")
+@rpc("call_local")
+func client_show_future(cards_arr):
+	print("--- TOP CARDS ---")
+	for tex in cards_arr:
+		print("  ", card_types[tex])
+
+func apply_shuffle(p_id):
 	deck.shuffle()
-	print("Deck shuffled.")
+	print("SERVER: Deck shuffled.")
 
 
-func handle_cat_play(cat_type):
-	var count := 0
+# ---------- SERVER CAT COMBOS ----------
+
+func handle_cat_play_server(p_id, cat_type):
+	var key = str(p_id) + "_" + cat_type
+
+	# count how many of this cat type played this turn
+	var count = 0
 	for c in cards_played_this_turn:
 		if c == cat_type:
 			count += 1
 
 	if count == 2:
-		print("TWO-OF-A-KIND activated for:", cat_type)
-		activate_two_cat_combo(cat_type)
+		print("SERVER: TWO-OF-A-KIND for", cat_type, "by player", p_id)
+		# TODO: steal random card from opponent
 
-	elif count == 3:
-		print("THREE-OF-A-KIND activated for:", cat_type)
-		activate_three_cat_combo(cat_type)
-
-	# If you want: 5 unique cats combo here
-func activate_two_cat_combo(cat_type):
-	print("Steal a random card from opponent (not implemented yet)")
+	if count == 3:
+		print("SERVER: THREE-OF-A-KIND for", cat_type, "by player", p_id)
+		# TODO: steal specific card from opponent
 
 
-func activate_three_cat_combo(cat_type):
-	print("Steal a specific card of your choice (not implemented yet)")
+# ===========================
+#  CLIENT — CARD CLICK
+# ===========================
+
+func _on_card_played(card):
+	if not is_my_turn:
+		print("It's not your turn!")
+		return
+
+	var tex = card.texture
+	var type = card_types[tex]
+
+	if not can_play_card(type):
+		return
+
+	# ask the server to play this card type
+	rpc_id(1, "server_play_card", player_id, type)
 
 
+# ===========================
+#  LAYOUT & DRAW BUTTON
+# ===========================
 
 func update_card_positions():
 	if cards.is_empty():
@@ -382,5 +459,6 @@ func update_card_positions():
 		x += spacing
 
 
-func _on_button_pressed() -> void:
-	draw_card()
+func _on_button_pressed():
+	# ask server to draw a card for this player
+	rpc_id(1, "server_draw_card", player_id)

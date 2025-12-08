@@ -1,0 +1,21 @@
+63f7b34db8d8cdea90c76aacccf841ec
+::res://::1765219363
+card.gd::GDScript::3065200021330517021::1765218613::0::1::::<>TextureRect<><>0<>0<><>::
+card.tscn::PackedScene::2691182431359828078::1765218613::0::1::::<><><>0<>0<><>::uid://bmihvohn12jas::::res://cards/cat tac card.png<>uid://bjw2nqm26xh46::::res://card.gd
+hand.gd::GDScript::5298877999063921113::1765218613::0::1::::<>Control<><>0<>0<><>::
+hand.tscn::PackedScene::859394567056426311::1765218613::0::1::::<><><>0<>0<><>::uid://chq20m6hfi6mv::::res://hand.gd
+icon.svg::CompressedTexture2D::1790880795757653::1765218613::1765219364::1::::<><><>0<>0<>1d558fff71561543e2cf7e0d300c3350<>res://.godot/imported/icon.svg-218a8f2b3041327d8a5756f3a245f83b.ctex::
+::res://cards/::1765218613
+cat tac card.png::CompressedTexture2D::3245665096770345742::1765218613::1765219364::1::::<><><>0<>0<>58e3e5fa9f30ce1aed313b8a18966b53<>res://.godot/imported/cat tac card.png-2faa06d62b4deabe00789309057f71f5.ctex::
+cat-alope card.png::CompressedTexture2D::653899640027976582::1765218613::1765219364::1::::<><><>0<>0<>977119120ba210517afa114f6e94bd84<>res://.godot/imported/cat-alope card.png-0af44f409e7ceefe23ab019b1e5f2fb0.ctex::
+combusting cat card.png::CompressedTexture2D::1464183523827029204::1765218613::1765219364::1::::<><><>0<>0<>9594e81f0d3ed999578884c7b7396878<>res://.godot/imported/combusting cat card.png-6c50fbb0f29f03b823ce9a390c492751.ctex::
+commence hostilities card.png::CompressedTexture2D::1610677808015863278::1765218613::1765219364::1::::<><><>0<>0<>eb1ccb30b627085f6e8117fec749cf6b<>res://.godot/imported/commence hostilities card.png-0dcb98c09fbd9a355bc665140aa479f8.ctex::
+deactivate card.png::CompressedTexture2D::5389293243904099376::1765218613::1765219364::1::::<><><>0<>0<>ae59482a983b9c3af56d3f735b68e34b<>res://.godot/imported/deactivate card.png-1e9a4ee0ae276cb2a3c03fd55be7de21.ctex::
+gay cat card.png::CompressedTexture2D::2872051545187680013::1765218613::1765219364::1::::<><><>0<>0<>b9753429d282350f9b692938c1a5472c<>res://.godot/imported/gay cat card.png-c18011e210a2e1e2a104c51d782dd8e4.ctex::
+goatee cat card.png::CompressedTexture2D::6140907106963020599::1765218613::1765219364::1::::<><><>0<>0<>27456ebdf2d9beffc05569bcb541f9a0<>res://.godot/imported/goatee cat card.png-f6cdea3a30340c675fc21bc50b12de6b.ctex::
+indulgence card.png::CompressedTexture2D::4966150463616675649::1765218613::1765219364::1::::<><><>0<>0<>046aa4ff5015c5dc2a21dbc33f5d634d<>res://.godot/imported/indulgence card.png-165d1209fb4f0b927c66215e57b0f401.ctex::
+no card.png::CompressedTexture2D::4904560304712687734::1765218613::1765219364::1::::<><><>0<>0<>e38a56ed486882ff2d0432768100ac6c<>res://.godot/imported/no card.png-02c930d605e1889eea97df468d036496.ctex::
+omit card.png::CompressedTexture2D::7657626940789695127::1765218613::1765219364::1::::<><><>0<>0<>a1e748ae9678b98e7b5ed651cbd0128e<>res://.godot/imported/omit card.png-19c02ea387fbbf97eeec27eff2e4f5e1.ctex::
+rearrange card.png::CompressedTexture2D::1006148531724318105::1765218613::1765219364::1::::<><><>0<>0<>4668582375046c5a7f16042267a7e1d2<>res://.godot/imported/rearrange card.png-fc2d9954763f6d1307b9895a81e46e33.ctex::
+view 2050 card.png::CompressedTexture2D::4682129257399527745::1765218613::1765219364::1::::<><><>0<>0<>81782bff824ead83b50113f4536d56fe<>res://.godot/imported/view 2050 card.png-879ee05accc8b6cf7fb6d84a0e27ce9f.ctex::
+yam cat with hair card.png::CompressedTexture2D::4511917482411350087::1765218613::1765219364::1::::<><><>0<>0<>e07bfb1a4737874c62d2d6417904887b<>res://.godot/imported/yam cat with hair card.png-1e09411ceee61e8a8087f59169f613ef.ctex::
