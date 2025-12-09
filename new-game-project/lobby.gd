@@ -1,47 +1,73 @@
 extends Control
 
-@onready var host_btn := $host
-@onready var join_btn := $join
-@onready var ip_box := $roomcode
+const DEFAULT_IP := "127.0.0.1"  # LAN only. Replace with real IP for online play.
 
-var peer := ENetMultiplayerPeer.new()
+@onready var code_input := $roomcode
+@onready var join_button := $join
+@onready var host_button := $host
+@onready var room_code_label := $code
 
 func _ready():
-	host_btn.pressed.connect(_on_host_pressed)
-	join_btn.pressed.connect(_on_join_pressed)
+	join_button.pressed.connect(_on_join_pressed)
+	host_button.pressed.connect(_on_host_pressed)
 
-	# Debug prints
-	multiplayer.peer_connected.connect(func(id): print("CONNECTED:", id))
-	multiplayer.peer_disconnected.connect(func(id): print("DISCONNECTED:", id))
-	multiplayer.server_disconnected.connect(func(): print("SERVER CLOSED"))
-	
 
+# -----------------------------
+# HOST CREATES ROOM
+# -----------------------------
 func _on_host_pressed():
-	var result := peer.create_server(7777, 2)
-	if result != OK:
-		print("FAILED TO HOST:", result)
+	var room_code = str(randi_range(1000, 9999))  # 4-digit code
+	room_code_label.text = "Room Code: " + room_code
+
+	# Use room code as PORT
+	var port = int(room_code)
+
+	var peer = ENetMultiplayerPeer.new()
+	var error = peer.create_server(port, 2)
+
+	if error != OK:
+		room_code_label.text = "Error creating room."
 		return
 
 	multiplayer.multiplayer_peer = peer
-	print("*** HOST STARTED ***")
+	print("SERVER STARTED on port:", port)
 
-	_load_game_scene()
+	# Load game scene for host
+	await get_tree().create_timer(5).timeout
+	get_tree().change_scene_to_file("res://Hand.tscn")
 
+
+# -----------------------------
+# CLIENT JOINS ROOM
+# -----------------------------
 func _on_join_pressed():
-	var ip :String = ip_box.text.strip_edges()
-	if ip == "":
-		ip = "127.0.0.1"   # Default to localhost
+	var code = code_input.text.strip_edges()
+	if code.length() < 4:
+		room_code_label.text = "Invalid code"
+		return
 
-	var result := peer.create_client(ip, 7777)
-	if result != OK:
-		print("FAILED TO JOIN:", result)
+	var port = int(code)
+
+	var peer = ENetMultiplayerPeer.new()
+	var error = peer.create_client(DEFAULT_IP, port)
+
+	if error != OK:
+		room_code_label.text = "Failed to connect."
 		return
 
 	multiplayer.multiplayer_peer = peer
-	print("*** CONNECTING TO HOST ***")
 
-	_load_game_scene()
+	print("CLIENT CONNECTING to port:", port)
 
-func _load_game_scene():
-	await get_tree().create_timer(0.1).timeout
-	get_tree().change_scene_to_file("res://HandScene.tscn")
+	# Client loads game scene after connection is successful
+	multiplayer.connected_to_server.connect(_on_join_success)
+	multiplayer.connection_failed.connect(_on_join_fail)
+
+
+func _on_join_success():
+	print("CLIENT: Connected!")
+	get_tree().change_scene_to_file("res://Hand.tscn")
+
+
+func _on_join_fail():
+	room_code_label.text = "Connection failed."
