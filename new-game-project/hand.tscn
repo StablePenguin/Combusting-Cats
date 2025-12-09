@@ -20,11 +20,12 @@ grow_vertical = 2
 script = ExtResource("1_u4p2i")
 
 [node name="Button" type="Button" parent="."]
+z_index = 25
 layout_mode = 0
 offset_left = 848.0
-offset_top = -144.0
+offset_top = -176.0
 offset_right = 960.0
-offset_bottom = -37.0
+offset_bottom = -69.0
 theme_override_fonts/font = SubResource("SystemFont_u4p2i")
 theme_override_font_sizes/font_size = 31
 text = "Draw
@@ -37,5 +38,13 @@ offset_top = -221.0
 offset_right = 489.0
 offset_bottom = -62.0
 expand_mode = 5
+
+[node name="opponentcards" type="Control" parent="."]
+custom_minimum_size = Vector2(792, 209)
+anchors_preset = 0
+offset_left = -0.42000008
+offset_top = -438.0
+offset_right = 791.58
+offset_bottom = -229.0
 
 [connection signal="pressed" from="Button" to="." method="_on_button_pressed"]

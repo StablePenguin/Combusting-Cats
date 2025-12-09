@@ -22,10 +22,10 @@ text = "Host"
 
 [node name="join" type="Button" parent="."]
 layout_mode = 0
-offset_left = 616.0
-offset_top = 385.0
-offset_right = 703.0
-offset_bottom = 429.0
+offset_left = 611.0
+offset_top = 361.0
+offset_right = 698.0
+offset_bottom = 405.0
 text = "Join"
 
 [node name="roomcode" type="LineEdit" parent="."]
@@ -51,8 +51,5 @@ offset_bottom = 23.0
 
 [node name="ip_field" type="LineEdit" parent="."]
 layout_mode = 0
-offset_left = 461.0
-offset_top = 408.0
-offset_right = 606.0
-offset_bottom = 451.0
-placeholder_text = "IP"
+offset_right = 68.5625
+offset_bottom = 31.0
