@@ -1,6 +1,6 @@
 extends Control
 
-const DEFAULT_IP := "127.0.0.1"  # LAN only. Replace with real IP for online play.
+const DEFAULT_IP := "192.168.196.76"  # LAN only. Replace with real IP for online play.
 
 @onready var code_input := $roomcode
 @onready var join_button := $join
@@ -66,7 +66,7 @@ func _on_join_pressed():
 
 func _on_join_success():
 	print("CLIENT: Connected!")
-	get_tree().change_scene_to_file("res://Hand.tscn")
+	get_tree().change_scene_to_file("res://hand.tscn")
 
 
 func _on_join_fail():
